@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL ─────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: fraudguard_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fraudguard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # ─── Redis ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fraudguard_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # ─── Backend (FastAPI) ──────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fraudguard_api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/fraudguard
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - model_data:/app/ml_pipeline/models
+
+  # ─── Frontend (Vite dev server) ─────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fraudguard_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+
+volumes:
+  pgdata:
+  model_data:
